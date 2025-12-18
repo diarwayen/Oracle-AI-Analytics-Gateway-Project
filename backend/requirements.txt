@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+oracledb    # Yeni nesil Oracle kütüphanesi (cx_Oracle yerine)
+requests    # Ollama ile konufastapi
+uvicorn
+oracledb
+requests
+python-dotenv  # .env dosyasını okumak için
+pandas         # Veri işleme (Dataframe) için şart
+numpy          # Matematiksel işlemler için
+scikit-learn   # Makine öğrenmesi (Linear Regression vb.) için
+langchain      # AI Agent ve zincir yapıları için
+langchain-community # Langchain ek modüllerişmak için
+google-generativeai
