@@ -1,57 +1,78 @@
-from fastapi import APIRouter
-from services import oracle
-import random
-from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Security
+from typing import List, Dict, Any
+from services.llm import llm_service 
+from services.oracle import OracleService
+from models.schemas import UserQuestion
+from core.security import get_api_key
+import logging
+
+# Loglama
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# --- SABİT RAPORLAR ---
-
-@router.get("/top-sales")
-def get_top_sales():
-    """En çok satan 10 ürünü getiren rapor"""
-    # DÜZELTME 1: Çok satırlı SQL için üç tırnak kullanıldı
-    sql = """
-    SELECT product_name, amount 
-    FROM sales 
-    ORDER BY amount DESC 
-    FETCH FIRST 10 ROWS ONLY
-    """
-    return oracle.run_query(sql)
-
-@router.get("/monthly-revenue")
-def get_monthly_revenue():
-    """Aylık ciro raporu"""
-    # DÜZELTME 2: Üç tırnak kullanıldı
-    sql = """
-    SELECT SUM(amount) as total 
-    FROM sales 
-    WHERE sale_date > SYSDATE - 30
-    """
-    return oracle.run_query(sql)
-
-# --- TEST ENDPOINT ---
-
-@router.get("/mock-test")
-def get_mock_data():
-    """
-    Grafana testi için rastgele veri üreten sahte endpoint.
-    DB bağlantısı gerektirmez.
-    """
-    # DÜZELTME 3: Girintiler (Indentation) düzeltildi
-    data = []
-    categories = ["Elektronik", "Giyim", "Gıda", "Kırtasiye", "Otomotiv"]
-    
-    # Son 7 gün için rastgele veri üretelim
-    for i in range(7):
-        date_value = datetime.now() - timedelta(days=i)
+# --- 1. GERÇEK FONKSİYON ---
+@router.post("/ask-ai")
+async def ask_ai(
+    request: UserQuestion, 
+    api_key: str = Security(get_api_key)
+):
+    try:
+        # Oracle Bağlantısı
+        oracle = OracleService()
+        oracle.connect()
+        schema_info = oracle.get_schema_info()
         
-        item = {
-            "tarih": date_value.strftime("%Y-%m-%d"),
-            "kategori": random.choice(categories),
-            "satis_adedi": random.randint(10, 500),
-            "ciro": random.randint(1000, 50000)
+        # AI Çağrısı
+        logger.info(f"AI'ya soruluyor: {request.user_question}")
+        ai_response = llm_service.get_sql(request.user_question, schema_info)
+        
+        generated_sql = ai_response.get("sql", "")
+        explanation = ai_response.get("explanation", "")
+        
+        # SQL Çalıştırma
+        data = []
+        if generated_sql and generated_sql != "ERROR":
+            data = oracle.execute_query(generated_sql)
+            
+        oracle.close()
+        
+        return {
+            "user_question": request.user_question,
+            "generated_sql": generated_sql,
+            "explanation": explanation,
+            "data": data
         }
-        data.append(item)
-    
-    return data
+
+    except Exception as e:
+        logger.error(f"Hata: {str(e)}")
+        return {
+            "error": "İşlem hatası",
+            "detail": str(e)
+        }
+
+# --- 2. TEST FONKSİYONU (Veritabanı olmadan test için) ---
+@router.post("/test-only-llm")
+async def test_llm_connection(
+    request: UserQuestion, 
+    api_key: str = Security(get_api_key)
+):
+    try:
+        dummy_schema = "Tablo: TEST_TABLO, Kolonlar: ID, AD"
+        
+        # AI Çağrısı
+        ai_response = llm_service.get_sql(request.user_question, dummy_schema)
+        
+        return {
+            "durum": "BAŞARILI ✅",
+            "mesaj": "Grafana ve AI konuşuyor!",
+            "cevap": ai_response
+        }
+            
+    except Exception as e:
+        import traceback
+        return {
+            "durum": "HATA ❌",
+            "hata": str(e),
+            "trace": traceback.format_exc()
+        }

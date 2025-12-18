@@ -1,50 +1,57 @@
-from fastapi import APIRouter, HTTPException, Depends
-from models.schemas import QueryRequest, APIResponse
-from services import llm, oracle, logger
-from core.security import get_api_key
+# backend/routers/api.py - FİNAL VERSİYON (TEST VE GERÇEK BİR ARADA)
 
-# Router tanımla (Küçük bir app gibi davranır)
-# Tüm endpoint'ler için API key kontrolü uygula
+from fastapi import APIRouter, HTTPException, Depends, Security
+from models.schemas import UserQuestion, APIResponse
+from services.llm import llm_service
+from services.oracle import OracleService
+from core.security import get_api_key
+import logging
+import traceback
+
+# Logger ayarı
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     dependencies=[Depends(get_api_key)]
 )
 
+# --- 1. GERÇEK FONKSİYON (Veritabanı Bağlantılı) ---
 @router.post("/ask-ai", response_model=APIResponse)
-def ask_ai_endpoint(request: QueryRequest):
+def ask_ai_endpoint(request: UserQuestion):
     """
     Kullanıcının doğal dilde sorduğu soruyu alır,
     LLM ile SQL üretir ve Oracle veritabanında çalıştırır.
-    Sonucu standart APIResponse formatında döner.
     """
+    oracle = None
     try:
-        # 1) LLM'den SQL üret
-        llm_result = llm.generate_sql_from_text(request.user_question)
+        # Şemayı çekmek için önce Oracle'a bağlanalım
+        oracle = OracleService()
+        oracle.connect()
+        schema_info = oracle.get_schema_info()
+        
+        logger.info(f"Kullanıcı Sorusu: {request.user_question}")
+        
+        # LLM Servisini Çağır
+        llm_result = llm_service.get_sql(request.user_question, schema_info)
+        
         if not llm_result:
-            raise ValueError("AI hata verdi veya boş cevap döndü.")
+             raise ValueError("AI boş cevap döndü.")
 
         sql = llm_result.get("sql")
-        explanation = llm_result.get("aciklama")
+        explanation = llm_result.get("explanation")
 
-        if not sql:
-            raise ValueError("AI geçerli bir SQL üretemedi.")
+        if not sql or sql == "ERROR":
+            raise ValueError(f"AI SQL üretemedi: {explanation}")
 
-        # 2) Oracle'da sorguyu çalıştır
-        data = oracle.run_query(sql)
+        # Oracle'da sorguyu çalıştır
+        data = oracle.execute_query(sql)
 
-        # Hata nesnesi döndüyse onu fırlat
+        # Hata kontrolü
         if isinstance(data, dict) and data.get("error"):
             raise ValueError(data["error"])
 
-        # 3) Loglama
-        row_count = len(data) if isinstance(data, list) else 0
-        logger.logger.log_interaction(
-            request.user_question,
-            sql,
-            True,
-            row_count=row_count,
-        )
+        logger.info(f"Başarılı İşlem! SQL: {sql}")
 
-        # 4) Standart response
         return APIResponse(
             user_question=request.user_question,
             generated_sql=sql,
@@ -53,11 +60,45 @@ def ask_ai_endpoint(request: QueryRequest):
         )
 
     except Exception as e:
-        # Başarısız denemeyi logla
-        logger.logger.log_interaction(
-            request.user_question,
-            None,
-            False,
-            error_message=str(e),
-        )
+        logger.error(f"Hata oluştu: {str(e)}")
+        # Oracle hatası olsa bile kullanıcıya düzgün formatta dönelim
         raise HTTPException(status_code=500, detail=str(e))
+        
+    finally:
+        if oracle:
+            oracle.close()
+
+# --- 2. TEST FONKSİYONU (Veritabanı olmadan test için - EKLENDİ ✅) ---
+@router.post("/test-only-llm")
+async def test_llm_connection(request: UserQuestion):
+    """
+    Bu fonksiyon Oracle'a bağlanmaz. Sadece AI'ın (TinyLlama) cevap verip vermediğini test eder.
+    Grafana testi için bunu kullanabilirsin.
+    """
+    try:
+        # Sahte bir şema uyduralım
+        dummy_schema = """
+        Tablo: SATISLAR
+        Kolonlar: URUN_ADI (VARCHAR), MIKTAR (NUMBER), TARIH (DATE)
+        """
+        
+        logger.info(f"TEST: AI'ya soruluyor: {request.user_question}")
+        
+        # AI'ya sor
+        ai_response = llm_service.get_sql(request.user_question, dummy_schema)
+        
+        logger.info("TEST: AI Cevap verdi!")
+        
+        return {
+            "durum": "connected",
+            "mesaj": "Grafana and AI are connected.",
+            "ai_generated_data": ai_response
+        }
+            
+    except Exception as e:
+        logger.error(f"TEST HATASI: {str(e)}")
+        return {
+            "durum": "HATA ❌",
+            "hata": str(e),
+            "trace": traceback.format_exc()
+        }

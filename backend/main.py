@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from routers import ai, reports  # Router dosyalarımızı çağırdık
+from routers import ai
+from routers import reports
 
 app = FastAPI(
     title="Oracle AI Analytics Gateway",
