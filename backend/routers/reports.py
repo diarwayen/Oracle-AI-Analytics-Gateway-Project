@@ -51,28 +51,3 @@ async def ask_ai(
             "detail": str(e)
         }
 
-# --- 2. TEST FONKSİYONU (Veritabanı olmadan test için) ---
-@router.post("/test-only-llm")
-async def test_llm_connection(
-    request: UserQuestion, 
-    api_key: str = Security(get_api_key)
-):
-    try:
-        dummy_schema = "Tablo: TEST_TABLO, Kolonlar: ID, AD"
-        
-        # AI Çağrısı
-        ai_response = llm_service.get_sql(request.user_question, dummy_schema)
-        
-        return {
-            "durum": "BAŞARILI ✅",
-            "mesaj": "Grafana ve AI konuşuyor!",
-            "cevap": ai_response
-        }
-            
-    except Exception as e:
-        import traceback
-        return {
-            "durum": "HATA ❌",
-            "hata": str(e),
-            "trace": traceback.format_exc()
-        }

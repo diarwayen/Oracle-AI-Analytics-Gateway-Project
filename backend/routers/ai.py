@@ -102,3 +102,13 @@ async def test_llm_connection(request: UserQuestion):
             "hata": str(e),
             "trace": traceback.format_exc()
         }
+
+# backend/routers/api.py içine eklenecek
+
+@router.get("/mock-test")  # Başına /api otomatik gelecektir
+async def mock_test():
+    return [
+        {"id": 1, "product": "Klavye", "sales": 150, "status": "OK"},
+        {"id": 2, "product": "Mouse", "sales": 200, "status": "OK"},
+        {"id": 3, "product": "Monitor", "sales": 80, "status": "Warning"}
+    ]
