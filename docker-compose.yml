@@ -39,6 +39,7 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - ollama
+      - mongodb 
     networks:
       - my-network
 
@@ -55,6 +56,22 @@ services:
       - mongodb_data:/data/db
     networks:
       - my-network
+
+  # --- YENİ EKLENEN SERVİS ---
+  mongo-express:
+    image: mongo-express
+    container_name: mongo_express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: secretpassword
+      ME_CONFIG_MONGODB_URL: mongodb://admin:secretpassword@mongodb:27017/
+    networks:
+      - my-network
+    depends_on:
+      - mongodb
 
 volumes:
   grafana-storage:

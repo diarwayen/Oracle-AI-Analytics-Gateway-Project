@@ -16,7 +16,7 @@ class AuditLogger:
             self.client = MongoClient(settings.MONGO_URI, serverSelectionTimeoutMS=2000)
             self.db = self.client[settings.MONGO_DB_NAME]
             self.collection = self.db["interactions"] # Tablo adı 'interactions' olsun
-
+            self.collection.create_index("timestamp", expireAfterSeconds=2592000)
             self.client.server_info()
             print("MongoDB Loglama Servisi Bağlandı.")
         except Exception as e:
