@@ -13,8 +13,6 @@ class OracleService:
     def connect(self):
         """Veritabanına bağlanır"""
         try:
-            # Senin eski kodundaki ayarları kullanıyoruz (DB_USER, DB_DSN vs.)
-            # Eğer config.py'de isimler farklıysa (ORACLE_USER gibi) burayı düzeltmen gerekir.
             self.connection = oracledb.connect(
                 user=settings.DB_USER,
                 password=settings.DB_PASS,
@@ -43,8 +41,7 @@ class OracleService:
             """
             self.cursor.execute(query)
             rows = self.cursor.fetchall()
-            
-            # AI için okunabilir metne çevir
+
             schema_text = "Veritabanı Şeması:\n"
             current_table = ""
             
@@ -68,7 +65,7 @@ class OracleService:
         """
         AI'dan gelen SQL'i çalıştırır.
         """
-        # Güvenlik Kontrolü (Senin eski kodundan aldım)
+
         forbidden = ["DELETE", "DROP", "TRUNCATE", "INSERT", "UPDATE", "ALTER"]
         if any(word in sql_query.upper() for word in forbidden):
             return {"error": "Güvenlik Uyarısı: Sadece okuma (SELECT) yapılabilir!"}
@@ -77,12 +74,10 @@ class OracleService:
             if not self.cursor:
                 self.connect()
 
-            # Noktalı virgül temizliği (Oracle sevmez)
             sql_query = sql_query.replace(";", "")
             
             self.cursor.execute(sql_query)
             
-            # Sonucu Dictionary Listesi olarak al
             if self.cursor.description:
                 columns = [col[0] for col in self.cursor.description]
                 self.cursor.rowfactory = lambda *args: dict(zip(columns, args))

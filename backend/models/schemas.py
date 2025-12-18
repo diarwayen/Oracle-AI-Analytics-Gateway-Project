@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Any, Optional
 
-# İsim değişikliği yapıldı: QueryRequest -> UserQuestion
+
 class UserQuestion(BaseModel):
     """
     Kullanıcının doğal dilde sorduğu soruyu temsil eder.

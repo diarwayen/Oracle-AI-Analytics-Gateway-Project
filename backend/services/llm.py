@@ -49,7 +49,7 @@ class LLMService:
             # 2. Parser
             parser = JsonOutputParser()
             
-            # 3. ZİNCİR KURULUMU (Senin istediğin LangChain yapısı burada)
+            # 3. ZİNCİR KURULUMU
             chain = prompt | self.llm | parser
             
             # 4. Çalıştırma

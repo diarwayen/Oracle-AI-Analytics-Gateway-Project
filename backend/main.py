@@ -7,14 +7,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# --- ROUTERLARI BAĞLAMA ---
 
-# 1. AI rotalarını "/api" önekiyle ekle
-# Sonuç: /api/ask-ai
 app.include_router(ai.router, prefix="/api", tags=["AI Chat"])
 
-# 2. Rapor rotalarını "/reports" önekiyle ekle
-# Sonuç: /reports/top-sales
+
 app.include_router(reports.router, prefix="/reports", tags=["Fixed Reports"])
 
 @app.get("/")

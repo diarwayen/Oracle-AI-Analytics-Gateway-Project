@@ -16,7 +16,7 @@ def get_api_key(api_key: str = Security(api_key_header)) -> str:
     """
     expected_key = os.getenv("ORACLE_GATEWAY_API_KEY")
 
-    # Eğer API key konfigüre edilmemişse, güvenli tarafta kalmak için reddet
+
     if not expected_key:
         raise HTTPException(
             status_code=HTTP_401_UNAUTHORIZED,
