@@ -12,3 +12,4 @@ scikit-learn   # Makine öğrenmesi (Linear Regression vb.) için
 langchain      # AI Agent ve zincir yapıları için
 langchain-community # Langchain ek modüllerişmak için
 google-generativeai
+pymongo

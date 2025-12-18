@@ -42,9 +42,24 @@ services:
     networks:
       - my-network
 
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_container
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secretpassword
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - my-network
+
 volumes:
   grafana-storage:
   ollama_storage:
+  mongodb_data:
 
 networks:
   my-network:
