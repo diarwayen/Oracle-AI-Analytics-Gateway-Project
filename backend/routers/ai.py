@@ -1,82 +1,87 @@
-# backend/routers/api.py - FİNAL VERSİYON (TEST VE GERÇEK BİR ARADA)
-
 from fastapi import APIRouter, HTTPException, Depends, Security
 from models.schemas import UserQuestion, APIResponse
-from services.llm import llm_service
+# ÖNEMLİ: Sadece run_agent import ediliyor, llm_service SİLİNDİ.
+from services.llm import run_agent 
 from services.oracle import OracleService
+from services.logger import logger as audit_logger
 from core.security import get_api_key
 import logging
 import traceback
 
-# Logger ayarı
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     dependencies=[Depends(get_api_key)]
 )
 
-# --- 1. GERÇEK FONKSİYON (Veritabanı Bağlantılı) ---
+# --- 1. GERÇEK FONKSİYON (Veritabanı Bağlantılı LangGraph) ---
 @router.post("/ask-ai", response_model=APIResponse)
 def ask_ai_endpoint(request: UserQuestion):
-    """
-    Kullanıcının doğal dilde sorduğu soruyu alır,
-    LLM ile SQL üretir ve Oracle veritabanında çalıştırır.
-    """
     oracle = None
+    generated_sql = None
+    data = None
+    error_msg = None
+    success = False
+    explanation = None
+
     try:
-        # Şemayı çekmek için önce Oracle'a bağlanalım
+        # 1. Oracle Şemasını Çek (Graph'a vermek için)
         oracle = OracleService()
         oracle.connect()
         schema_info = oracle.get_schema_info()
+        oracle.close()
         
         logger.info(f"Kullanıcı Sorusu: {request.user_question}")
         
-        # LLM Servisini Çağır
-        llm_result = llm_service.get_sql(request.user_question, schema_info)
+        # 2. LANGGRAPH AJANINI ÇALIŞTIR
+        graph_result = run_agent(request.user_question, schema_info)
         
-        if not llm_result:
-             raise ValueError("AI boş cevap döndü.")
+        # Sonuçları al
+        generated_sql = graph_result.get("sql")
+        data = graph_result.get("data")
+        error_from_agent = graph_result.get("error")
 
-        sql = llm_result.get("sql")
-        explanation = llm_result.get("explanation")
+        # Ajan başarısız olduysa
+        if error_from_agent:
+            raise ValueError(f"AI işlemi başarısız oldu: {error_from_agent}")
 
-        if not sql or sql == "ERROR":
-            raise ValueError(f"AI SQL üretemedi: {explanation}")
-
-        # Oracle'da sorguyu çalıştır
-        data = oracle.execute_query(sql)
-
-        # Hata kontrolü
-        if isinstance(data, dict) and data.get("error"):
-            raise ValueError(data["error"])
-
-        logger.info(f"Başarılı İşlem! SQL: {sql}")
+        if not generated_sql:
+             raise ValueError("AI SQL üretemedi.")
+        
+        explanation = "LangGraph ajanı tarafından optimize edilerek çalıştırıldı."
+        success = True
+        logger.info(f"Başarılı İşlem! SQL: {generated_sql}")
 
         return APIResponse(
             user_question=request.user_question,
-            generated_sql=sql,
+            generated_sql=generated_sql,
             explanation=explanation,
             data=data,
         )
 
     except Exception as e:
-        logger.error(f"Hata oluştu: {str(e)}")
-        # Oracle hatası olsa bile kullanıcıya düzgün formatta dönelim
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        logger.error(f"Hata oluştu: {error_msg}")
+        raise HTTPException(status_code=500, detail=error_msg)
         
     finally:
-        if oracle:
-            oracle.close()
+        # MongoDB Loglama
+        row_count = len(data) if isinstance(data, list) else 0
+        audit_logger.log_interaction(
+            user_question=request.user_question,
+            sql_generated=generated_sql,
+            success=success,
+            error_message=error_msg,
+            row_count=row_count
+        )
 
-# --- 2. TEST FONKSİYONU (Veritabanı olmadan test için - EKLENDİ ✅) ---
+# --- 2. TEST FONKSİYONU (LangGraph Uyumlu Hale Getirildi) ---
 @router.post("/test-only-llm")
 async def test_llm_connection(request: UserQuestion):
     """
-    Bu fonksiyon Oracle'a bağlanmaz. Sadece AI'ın (TinyLlama) cevap verip vermediğini test eder.
-    Grafana testi için bunu kullanabilirsin.
+    Bu fonksiyon Oracle'a bağlanmaz, sahte şema ile ajanı test eder.
     """
     try:
-        # Sahte bir şema uyduralım
         dummy_schema = """
         Tablo: SATISLAR
         Kolonlar: URUN_ADI (VARCHAR), MIKTAR (NUMBER), TARIH (DATE)
@@ -84,15 +89,14 @@ async def test_llm_connection(request: UserQuestion):
         
         logger.info(f"TEST: AI'ya soruluyor: {request.user_question}")
         
-        # AI'ya sor
-        ai_response = llm_service.get_sql(request.user_question, dummy_schema)
-        
-        logger.info("TEST: AI Cevap verdi!")
+        # Ajanı çalıştır (Oracle bağlantısı yapmaya çalışacak ama dummy_schema olduğu için 
+        # sql üretecek, execute adımında hata alsa bile SQL'i göreceğiz)
+        graph_result = run_agent(request.user_question, dummy_schema)
         
         return {
             "durum": "connected",
-            "mesaj": "Grafana and AI are connected.",
-            "ai_generated_data": ai_response
+            "mesaj": "Grafana and AI are connected via LangGraph.",
+            "ai_output": graph_result
         }
             
     except Exception as e:
@@ -103,9 +107,7 @@ async def test_llm_connection(request: UserQuestion):
             "trace": traceback.format_exc()
         }
 
-# backend/routers/api.py içine eklenecek
-
-@router.get("/mock-test")  # Başına /api otomatik gelecektir
+@router.get("/mock-test")
 async def mock_test():
     return [
         {"id": 1, "product": "Klavye", "sales": 150, "status": "OK"},

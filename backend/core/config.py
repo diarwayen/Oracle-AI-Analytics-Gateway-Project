@@ -12,7 +12,8 @@ class Settings:
     LLM_MODEL = os.getenv("LLM_MODEL", "tinyllama")
     
     # Mongo Ayarları
-    MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:secretpassword@mongodb:27017")
+    # Docker içinde Mongo servisine 'mongo' hostname'i ile erişilir
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:secretpassword@mongo:27017")
     MONGO_DB_NAME = "ai_analytics_logs"
 
 

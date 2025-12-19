@@ -24,27 +24,42 @@ services:
       - "11434:11434"
     volumes:
       - ollama_storage:/root/.ollama
+      - ./setup_model:/root/model_setup
     networks:
       - my-network
 
   backend:
     build: ./backend
-    container_name: backend_gateway
+    container_name: backend_api
     ports:
       - "8000:8000"
     volumes:
       - "./backend:/app"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Oracle Bağlantı Bilgileri
+      - ORACLE_USER=myuser
+      - ORACLE_PASSWORD=mypassword
+      - ORACLE_DSN=oracle:1521/XEPDB1
+      - ORACLE_LIB_DIR=/opt/oracle/instantclient
     env_file:
       - .env
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # --- DÜZELTİLEN KISIM BAŞLANGIÇ ---
     depends_on:
-      - ollama
+      oracle:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      mongo:
+        condition: service_started
+    # --- DÜZELTİLEN KISIM BİTİŞ ---
     networks:
       - my-network
 
-  mongodb:
+  mongo:
     image: mongo:latest
-    container_name: mongodb_container
+    container_name: mongo
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
@@ -55,6 +70,45 @@ services:
       - mongodb_data:/data/db
     networks:
       - my-network
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: secretpassword
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: pass
+    networks:
+      - my-network
+    depends_on:
+      - mongo
+
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle_db
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PASSWORD=gizli_sifre
+      - APP_USER=myuser
+      - APP_USER_PASSWORD=mypassword
+    volumes:
+      # DİKKAT: Klasör yolu düzeltildi (docker-... yerine container-...)
+      - ./init_oracle.sql:/container-entrypoint-initdb.d/init_oracle.sql
+    networks:
+      - my-network
+    healthcheck:
+      # DİKKAT: localhost kullanıldı
+      test: ["CMD", "sqlplus", "-L", "myuser/mypassword@//localhost:1521/XEPDB1", "select 1 from dual"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
 volumes:
   grafana-storage:
