@@ -24,7 +24,7 @@ class Settings:
     MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:secretpassword@mongo:27017")
     MONGO_DB_NAME = "ai_analytics_logs"
 
-    ALLOWED_TABLES  = ["PERSONAL_ORG_AGACI_MV"]
+    ALLOWED_TABLES  = ["PERSONEL_ORG_AGACI_MV"]
     # Eski schema stringi
     TABLE_SCHEMA = """
     SATISLAR (id, urun_id, adet, toplam_tutar, satis_tarihi, musteri_sehir)

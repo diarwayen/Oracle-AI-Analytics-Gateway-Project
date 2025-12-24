@@ -58,12 +58,14 @@ class OracleService(QueryExecutor, SchemaProvider):
             if params is None: params = {}
             cursor.execute(sql_query, params)
             
+            # Yazma işlemleri için commit (Genelde SELECT kullanacağız ama dursun)
             if sql_query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER")):
                 self.connection.commit()
                 return {"status": "success", "rows": cursor.rowcount}
 
+            # Okuma işlemleri için sonuç döndür
             if cursor.description:
-                columns = [col[0].lower() for col in cursor.description]
+                columns = [col[0].upper() for col in cursor.description] # Kolon adlarını BÜYÜK harf yap
                 return [dict(zip(columns, row)) for row in cursor.fetchall()]
             return {"status": "success"}
         except oracledb.Error as e:
@@ -74,88 +76,32 @@ class OracleService(QueryExecutor, SchemaProvider):
 
     def get_schema_info(self) -> str:
         """
-        DİNAMİK ŞEMA ANALİZİ (FİLTRELİ):
-        Sadece config.py içindeki ALLOWED_TABLES listesindeki tabloları çeker.
+        MANUEL ŞEMA TANIMI:
+        Sistem tablolarını sorgulamak yerine, projenin odaklandığı tabloyu
+        ve kolonların işlevlerini doğrudan (hardcoded) veriyoruz.
+        Bu yöntem LLM'in hata yapma riskini en aza indirir.
         """
-        
-        # Filtre Listesini Hazırla
-        allowed_list = settings.ALLOWED_TABLES
-        
-        # Eğer liste boşsa güvenlik için hata döndürebilir veya hepsi çekilebilir.
-        # Bizim senaryoda boşsa "Hiçbir şey çekme" veya "Hepsini çek" kararı verilmeli.
-        # Güvenli olan: Liste doluysa filtrele.
-        
-        filter_sql = ""
-        if allowed_list and len(allowed_list) > 0:
-            # SQL Injection'a karşı basit önlem: Sadece harf/sayı/altçizgi
-            # Ama config dosyasından geldiği için güveniyoruz.
-            table_names_str = "', '".join([t.upper().strip() for t in allowed_list])
-            filter_sql = f"AND table_name IN ('{table_names_str}')"
-        
-        # 1. Tabloları ve Kolonları Çek (Filtreli)
-        cols_sql = f"""
-            SELECT table_name, column_name, data_type
-            FROM user_tab_columns
-            WHERE 1=1
-            {filter_sql}
-            ORDER BY table_name, column_id
-        """
-        
-        # 2. İlişkileri Çek (Filtreli)
-        # Sadece ilgili tabloların ilişkilerini getir
-        relations_sql = f"""
-            SELECT 
-                a.table_name, 
-                a.column_name, 
-                c_pk.table_name as r_table_name, 
-                c_pk.constraint_type
-            FROM user_cons_columns a
-            JOIN user_constraints c ON a.owner = c.owner AND a.constraint_name = c.constraint_name
-            LEFT JOIN user_constraints c_pk ON c.r_owner = c_pk.owner AND c.r_constraint_name = c_pk.constraint_name
-            WHERE c.constraint_type IN ('P', 'R')
-            {filter_sql} 
-        """
+        return """
+TABLO ADI: IFSAPP.PERSONEL_ORG_AGACI_MV
+AÇIKLAMA: Şirket personelinin organizasyonel, demografik ve iş durumunu içeren ana tablo.
 
-        try:
-            columns = self.execute_query(cols_sql)
-            relations = self.execute_query(relations_sql)
-            
-            if isinstance(columns, dict) and "error" in columns:
-                return f"Şema hatası: {columns['error']}"
-
-            if not columns:
-                return "HATA: İzin verilen tablolar veritabanında bulunamadı veya yetki yok."
-
-            # İlişkileri haritala
-            rel_map = {}
-            if isinstance(relations, list):
-                for r in relations:
-                    key = f"{r['TABLE_NAME']}.{r['COLUMN_NAME']}"
-                    if r['CONSTRAINT_TYPE'] == 'P':
-                        rel_map[key] = "(Primary Key)"
-                    elif r['CONSTRAINT_TYPE'] == 'R' and r['R_TABLE_NAME']:
-                        rel_map[key] = f"(Foreign Key -> {r['R_TABLE_NAME']} tablosuna bağlanır)"
-
-            # Metni Oluştur
-            schema_text = "FİLTRELENMİŞ VERİTABANI ŞEMASI:\n"
-            current_table = ""
-
-            for row in columns:
-                t = row['TABLE_NAME']
-                c = row['COLUMN_NAME']
-                d = row['DATA_TYPE']
-                
-                if t != current_table:
-                    schema_text += f"\n---------------------------------\nTABLO: {t}\n"
-                    current_table = t
-                
-                extra_info = rel_map.get(f"{t}.{c}", "")
-                schema_text += f"  - {c} ({d}) {extra_info}\n"
-
-            return schema_text
-
-        except Exception as e:
-            return f"Şema bilgisi alınamadı: {str(e)}"
+ÖNEMLİ KOLONLAR VE ANLAMLARI:
+- SIRKET (VARCHAR2): Şirket kodu.
+- ISYERI_ADI (VARCHAR2): Çalışanın bağlı olduğu fabrika veya lokasyon adı (Örn: ANKARA FABRİKA).
+- DEPARTMAN_ADI (VARCHAR2): Çalışanın departmanı (Örn: ÜRETİM, LOJİSTİK).
+- CALISAN_ADI (VARCHAR2): Personelin Adı Soyadı.
+- POZISYON_ACIKLAMASI (VARCHAR2): Çalışanın ünvanı / görevi.
+- AKTIF_CALISAN (NUMBER): Çalışan şu an aktifse 1, değilse 0 değerini alır. 
+  * "Toplam çalışan sayısı" sorulursa: SUM(AKTIF_CALISAN) kullanılmalıdır.
+- ISE_BASLAYAN (NUMBER): Dönem içinde işe giren sayısı. Toplanabilir.
+- ISTEN_AYRILAN (NUMBER): Dönem içinde işten ayrılan (turnover) sayısı. Toplanabilir.
+- CINSIYET (VARCHAR2): Personel cinsiyeti.
+- YAS (NUMBER): Personelin yaşı. (Ortalama yaş için AVG(YAS) kullanılabilir).
+- EGITIM_SEVIYESI (VARCHAR2): Eğitim durumu (Lise, Lisans vb.).
+- KIDEM_YILI (NUMBER): (Eğer varsa) Çalışma süresi.
+- IKAMET_IL (VARCHAR2): Personelin yaşadığı şehir.
+- MEDENI_DURUM (VARCHAR2): Evli/Bekar durumu.
+"""
 
     def close(self) -> None:
         if self.connection:

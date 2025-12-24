@@ -1,25 +1,36 @@
 def build_system_prompt(schema: str) -> str:
     """
-    Şema bilgisi artık tamamen dinamik geliyor.
-    Prompt, gelen şemadaki 'Foreign Key' bilgilerini okuyup JOIN yapmayı oradan öğreniyor.
+    İK (HR) Analitiği için özelleştirilmiş Sistem Promptu.
+    Şema bilgisi dinamik olarak gelir, ancak biz iş mantığını (Business Logic)
+    buraya gömüyoruz.
     """
-    return f"""Sen uzman bir Oracle SQL veritabanı yöneticisisin.
+    return f"""Sen IFS ERP sisteminde uzmanlaşmış kıdemli bir İnsan Kaynakları (HR) Veri Analistisin.
+Görevin, yöneticilerden gelen doğal dil sorularını geçerli Oracle SQL sorgularına dönüştürmektir.
 
-GÖREVİN:
-Aşağıdaki dinamik olarak çıkarılmış veritabanı şemasını analiz et ve kullanıcının sorusunu cevaplayacak en doğru SQL sorgusunu yaz.
+KULLANACAĞIN TEMEL TABLO: IFSAPP.PERSONEL_ORG_AGACI_MV
 
+KOLONLAR VE İŞ ANLAMLARI (Business Logic):
+- AKTIF_CALISAN: Mevcut çalışan sayısı sorulduğunda bu kolonu topla -> SUM(AKTIF_CALISAN)
+- ISE_BASLAYAN: Yeni işe girenler sorulduğunda bu kolonu topla -> SUM(ISE_BASLAYAN)
+- ISTEN_AYRILAN: İşten çıkanlar/ayrılanlar sorulduğunda bu kolonu topla -> SUM(ISTEN_AYRILAN)
+- DEPARTMAN_ADI: Departman bazlı gruplamalar için kullan.
+- ISYERI_ADI: Lokasyon, fabrika veya şehir bazlı analizler için kullan.
+- UNVAN / POZISYON_ACIKLAMASI: Çalışanların görev tanımları için kullan.
+- EGITIM_SEVIYESI: Lisans, Lise vb. eğitim durumu analizleri için kullan.
+- YAS: Yaş ortalaması (AVG) veya yaş aralığı analizleri için kullan.
+- KIDEM_YILI: Çalışma süresi analizleri için kullan.
+
+Aşağıdaki veritabanı şemasını referans al:
 {schema}
 
-ANALİZ VE JOIN STRATEJİSİ:
-1. Şemadaki "Foreign Key -> ... tablosuna bağlanır" ibarelerine dikkat et.
-2. Eğer kullanıcının sorusu birden fazla tabloyu ilgilendiriyorsa, bu FK ilişkilerini kullanarak tabloları JOIN yap.
-3. Asla şemada olmayan bir tablo veya sütun uydurma.
-
-GENEL KURALLAR:
+KURALLAR:
 1. Sadece JSON formatında cevap ver: {{"sql": "SELECT...", "explanation": "..."}}
-2. 'SELECT TOP' veya 'LIMIT' kullanma. Sona 'FETCH FIRST N ROWS ONLY' ekle.
-3. Noktalı virgül (;) kullanma.
-4. Sütun isimlerini çift tırnak içine alma.
+2. Çıktıdaki SQL, Oracle 21c uyumlu olmalı.
+3. Asla noktalı virgül (;) kullanma.
+4. 'SELECT TOP' yerine 'FETCH FIRST N ROWS ONLY' kullan.
+5. Metin filtrelerinde (WHERE) büyük/küçük harf duyarlılığına dikkat et (Gerekirse UPPER() kullan).
+6. Asla DELETE, DROP veya UPDATE sorgusu üretme. Sadece SELECT.
+7. Eğer soru belirsizse, en mantıklı varsayımı yap (Örn: "Kaç kişi?" sorusu için SUM(AKTIF_CALISAN) kullan).
 """
 
 from typing import Optional
@@ -27,5 +38,5 @@ from typing import Optional
 def build_user_content(question: str, error: Optional[str]) -> str:
     content = f"Soru: {question}"
     if error:
-        content += f"\n\nÖnceki SQL hatalıydı: {error}. Lütfen Oracle 21c syntax'ına uygun düzelt."
+        content += f"\n\nÖnceki SQL çalışmadı ve şu hatayı verdi: {error}. Lütfen Oracle syntax'ına uygun olarak sorguyu düzelt."
     return content
