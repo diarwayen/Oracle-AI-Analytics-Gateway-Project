@@ -7,34 +7,68 @@ from services.db.base import QueryExecutor, SchemaProvider
 
 logger = logging.getLogger(__name__)
 
+# Global Bağlantı Havuzu Değişkeni
+_pool = None
+
+def init_pool():
+    """
+    Uygulama başlarken (main.py lifespan içinde) çağrılır.
+    Veritabanı bağlantı havuzunu oluşturur.
+    """
+    global _pool
+    if _pool is None:
+        try:
+            logger.info("Oracle Connection Pool oluşturuluyor...")
+            _pool = oracledb.create_pool(
+                user=settings.ORACLE_USER,
+                password=settings.ORACLE_PASSWORD,
+                dsn=settings.ORACLE_DSN,
+                min=2,      # En az 2 bağlantı hep açık kalsın
+                max=10,     # Trafik artarsa en fazla 10'a çıksın
+                increment=1 # İhtiyaç oldukça 1'er 1'er artır
+            )
+            logger.info("Oracle Connection Pool başarıyla oluşturuldu.")
+        except Exception as e:
+            logger.error(f"Pool oluşturma hatası: {e}")
+            raise e
+
+def close_pool():
+    """Uygulama kapanırken çağrılır ve havuzu temizler."""
+    global _pool
+    if _pool:
+        try:
+            _pool.close()
+            _pool = None
+            logger.info("Oracle Connection Pool kapatıldı.")
+        except Exception as e:
+            logger.error(f"Pool kapatma hatası: {e}")
 
 class OracleService(QueryExecutor, SchemaProvider):
     """
-    Oracle adapter: QueryExecutor + SchemaProvider arayüzlerini uygular.
-    Bu sınıf Oracle'a özel; farklı tablo yapılarına uyum için kod değişmeden
-    çalışır, çünkü şema bilgisi dinamik çekilir.
+    OracleService artık bağlantıları Pool'dan ödünç alıyor.
+    QueryExecutor ve SchemaProvider arayüzlerine sadık kalır.
     """
 
     def __init__(self):
-        self.user = settings.ORACLE_USER
-        self.password = settings.ORACLE_PASSWORD
-        self.dsn = settings.ORACLE_DSN
         self.connection = None
 
     def connect(self) -> None:
+        """Havuzdan bir bağlantı ödünç alır (Acquire)."""
+        global _pool
+        if _pool is None:
+            # Geliştirme ortamında veya script çalıştırırken pool init edilmemiş olabilir
+            logger.warning("Pool bulunamadı, init_pool() çağrılıyor...")
+            init_pool()
+        
         try:
-            self.connection = oracledb.connect(
-                user=self.user,
-                password=self.password,
-                dsn=self.dsn,
-            )
+            self.connection = _pool.acquire()
         except Exception as e:
-            logger.error(f"Oracle bağlantı hatası: {e}")
+            logger.error(f"Pool'dan bağlantı alma hatası: {e}")
             raise e
 
     def execute_query(self, sql_query: str, params: Optional[Dict[str, Any]] = None):
         if not self.connection:
-            raise Exception("Veritabanı bağlantısı yok!")
+            raise Exception("Veritabanı bağlantısı yok! Önce connect() çağırın.")
 
         cursor = self.connection.cursor()
         try:
@@ -43,17 +77,21 @@ class OracleService(QueryExecutor, SchemaProvider):
 
             cursor.execute(sql_query, params)
 
-            if sql_query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+            # DML (Insert/Update/Delete) işlemleri için Commit gerekir
+            if sql_query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER")):
                 self.connection.commit()
-                return {"status": "success", "rows_affected": cursor.rowcount}
+                return {"status": "success", "rows_affected": cursor.rowcount if cursor.rowcount != -1 else "Done"}
 
-            columns = [col[0].lower() for col in cursor.description]
-            rows = cursor.fetchall()
-            result: List[Dict[str, Any]] = []
-            for row in rows:
-                result.append(dict(zip(columns, row)))
-
-            return result
+            # SELECT işlemleri için
+            if cursor.description:
+                columns = [col[0].lower() for col in cursor.description]
+                rows = cursor.fetchall()
+                result: List[Dict[str, Any]] = []
+                for row in rows:
+                    result.append(dict(zip(columns, row)))
+                return result
+            else:
+                return {"status": "success", "info": "No rows returned"}
 
         except oracledb.Error as e:
             error_obj, = e.args
@@ -71,16 +109,19 @@ class OracleService(QueryExecutor, SchemaProvider):
         try:
             rows = self.execute_query(schema_query)
 
-            if isinstance(rows, dict) and "error" in rows:
+            if isinstance(rows, list) is False and "error" in rows:
                 return f"Şema hatası: {rows['error']}"
 
             schema_text = "Veritabanı Şeması:\n"
             current_table = ""
 
+            # execute_query artık liste döndürdüğü için iterasyon güvenli
             for row in rows:
-                table = row["table_name"]
-                col = row["column_name"]
-                dtype = row["data_type"]
+                if not isinstance(row, dict): continue # Güvenlik kontrolü
+                
+                table = row.get("table_name")
+                col = row.get("column_name")
+                dtype = row.get("data_type")
 
                 if table != current_table:
                     schema_text += f"\nTablo: {table}\nKolonlar: "
@@ -94,8 +135,11 @@ class OracleService(QueryExecutor, SchemaProvider):
             return f"Şema bilgisi alınamadı: {str(e)}"
 
     def close(self) -> None:
+        """Bağlantıyı havuza geri iade eder (Release)."""
         if self.connection:
             try:
+                # Pool modunda .close(), bağlantıyı kapatmaz, havuza geri bırakır.
                 self.connection.close()
+                self.connection = None
             except Exception as e:
-                logger.error(f"Bağlantı kapatma hatası: {e}")
+                logger.error(f"Bağlantı iade hatası: {e}")
