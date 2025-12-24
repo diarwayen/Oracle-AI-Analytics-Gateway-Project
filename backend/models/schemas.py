@@ -3,20 +3,12 @@ from typing import Any, Optional
 
 
 class UserQuestion(BaseModel):
-    """
-    Kullanıcının doğal dilde sorduğu soruyu temsil eder.
-    Örnek:
-    {
-      "user_question": "Son 30 günde en çok satan 10 ürünü getir"
-    }
-    """
+
     user_question: str
 
 
 class APIResponse(BaseModel):
-    """
-    AI + Oracle hattından dönen standart cevabı temsil eder.
-    """
+
     user_question: str
     generated_sql: Optional[str] = None
     explanation: Optional[str] = None
@@ -24,7 +16,5 @@ class APIResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """
-    Hata durumlarında kullanılabilecek basit şema.
-    """
+
     detail: str
