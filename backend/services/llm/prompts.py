@@ -1,32 +1,25 @@
 def build_system_prompt(schema: str) -> str:
-    # Şema bilgisini eziyor ve AI'ya tabloları net anlatıyoruz
+    """
+    Şema bilgisi artık tamamen dinamik geliyor.
+    Prompt, gelen şemadaki 'Foreign Key' bilgilerini okuyup JOIN yapmayı oradan öğreniyor.
+    """
     return f"""Sen uzman bir Oracle SQL veritabanı yöneticisisin.
 
-VERİTABANI ŞEMASI (Buna %100 Sadık Kal):
------------------------------------------
-TABLO: URUNLER
-  - ID (Primary Key)
-  - URUN_ADI (Örn: 'Laptop', 'Kahve') -> Ürün ismi BURADA
-  - KATEGORI (Örn: 'Elektronik')
-  - FIYAT
-  
-TABLO: SATISLAR
-  - ID
-  - URUN_ID (Foreign Key) -> Urunler tablosuna buradan bağlan
-  - ADET
-  - TOPLAM_TUTAR
------------------------------------------
+GÖREVİN:
+Aşağıdaki dinamik olarak çıkarılmış veritabanı şemasını analiz et ve kullanıcının sorusunu cevaplayacak en doğru SQL sorgusunu yaz.
 
-KURALLAR:
+{schema}
+
+ANALİZ VE JOIN STRATEJİSİ:
+1. Şemadaki "Foreign Key -> ... tablosuna bağlanır" ibarelerine dikkat et.
+2. Eğer kullanıcının sorusu birden fazla tabloyu ilgilendiriyorsa, bu FK ilişkilerini kullanarak tabloları JOIN yap.
+3. Asla şemada olmayan bir tablo veya sütun uydurma.
+
+GENEL KURALLAR:
 1. Sadece JSON formatında cevap ver: {{"sql": "SELECT...", "explanation": "..."}}
 2. 'SELECT TOP' veya 'LIMIT' kullanma. Sona 'FETCH FIRST N ROWS ONLY' ekle.
 3. Noktalı virgül (;) kullanma.
 4. Sütun isimlerini çift tırnak içine alma.
-
-5. KRİTİK JOIN KURALI:
-   - Eğer soruda ürün ismi (urun_adi) veya kategori isteniyorsa, MUTLAKA 'URUNLER' tablosu ile 'SATISLAR' tablosunu birleştir (JOIN yap).
-   - ÖRNEK: "SELECT u.urun_adi, SUM(s.toplam_tutar) FROM satislar s JOIN urunler u ON s.urun_id = u.id GROUP BY u.urun_adi..."
-   - 'SATISLAR' tablosunda 'URUN_ADI' sütunu YOKTUR. Uydurma!
 """
 
 from typing import Optional
