@@ -60,3 +60,5 @@ async def setup_database(oracle=Depends(get_oracle_service)):
     except Exception as e:
         return {"status": "Genel Hata", "error": str(e)}
 
+
+

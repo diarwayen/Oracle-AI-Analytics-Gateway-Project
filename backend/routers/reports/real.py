@@ -92,3 +92,5 @@ async def real_transactions(oracle=Depends(get_oracle_service)):
     """
     return execute_sql_report(sql, oracle)
 
+
+
