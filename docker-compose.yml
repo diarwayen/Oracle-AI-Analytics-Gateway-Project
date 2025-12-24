@@ -71,6 +71,14 @@ services:
     networks:
       - my-network
 
+  redis:
+    image: redis:alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    networks:
+      - my-network
+
   mongo-express:
     image: mongo-express
     container_name: mongo-express

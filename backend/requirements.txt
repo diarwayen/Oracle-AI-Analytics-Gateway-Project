@@ -13,3 +13,5 @@ langchain-core
 langchain-ollama
 langgraph
 google-generativeai
+redis
+fastapi-cache2[redis]

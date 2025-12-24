@@ -3,6 +3,9 @@ from services.oracle import OracleService
 from core.deps import get_oracle_service
 import logging
 
+# --- REDIS CACHE IMPORT ---
+from fastapi_cache.decorator import cache
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Reports DB"])
@@ -17,7 +20,9 @@ def execute_sql_report(query: str, oracle: OracleService, params: dict = None):
         return {"error": str(e), "detail": "Lütfen /reports/setup-db adresine giderek tabloları oluşturun."}
 
 
+# 1. SATIŞ TRENDİ (60 saniye cache)
 @router.get("/db-sales-trend")
+@cache(expire=60) 
 async def real_sales_trend(oracle=Depends(get_oracle_service)):
     sql = """
     SELECT 
@@ -31,7 +36,9 @@ async def real_sales_trend(oracle=Depends(get_oracle_service)):
     return execute_sql_report(sql, oracle)
 
 
+# 2. KATEGORİ DAĞILIMI (5 dakika cache - daha az değişir)
 @router.get("/db-category-distribution")
+@cache(expire=300)
 async def real_category_dist(oracle=Depends(get_oracle_service)):
     sql = """
     SELECT 
@@ -45,7 +52,9 @@ async def real_category_dist(oracle=Depends(get_oracle_service)):
     return execute_sql_report(sql, oracle)
 
 
+# 3. KPI (60 saniye cache)
 @router.get("/db-kpi")
+@cache(expire=60)
 async def real_kpi(oracle=Depends(get_oracle_service)):
     kpi_data = {}
     try:
@@ -76,7 +85,9 @@ async def real_kpi(oracle=Depends(get_oracle_service)):
     return kpi_data
 
 
+# 4. SON İŞLEMLER (10 saniye cache - sık değişir)
 @router.get("/db-transactions")
+@cache(expire=10)
 async def real_transactions(oracle=Depends(get_oracle_service)):
     sql = """
     SELECT 
@@ -91,6 +102,3 @@ async def real_transactions(oracle=Depends(get_oracle_service)):
     FETCH FIRST 20 ROWS ONLY
     """
     return execute_sql_report(sql, oracle)
-
-
-

@@ -4,20 +4,34 @@ from routers import ai
 from routers import reports
 from core.errors import register_exception_handlers
 from services.oracle import init_pool, close_pool
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 
 # --- LIFESPAN: Uygulama Başlangıç/Bitiş Yönetimi ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Startup: Havuzu Başlat
+    # 1. Oracle Havuzunu Başlat
     init_pool()
+    
+    # 2. Redis Cache'i Başlat (YENİ EKLENDİ)
+    # Docker içinde Redis servis adı 'redis' olduğu için host='redis'
+    try:
+        redis = aioredis.from_url("redis://redis:6379", encoding="utf8", decode_responses=True)
+        FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+        print("Redis Cache Başlatıldı.")
+    except Exception as e:
+        print(f"Redis başlatılamadı: {e}")
+
     yield
-    # 2. Shutdown: Havuzu Temizle
+    
+    # 3. Kapanış İşlemleri
     close_pool()
 
 app = FastAPI(
     title="Oracle AI Analytics Gateway",
     version="1.0.0",
-    lifespan=lifespan  # Lifespan'i buraya bağlıyoruz
+    lifespan=lifespan
 )
 
 app.include_router(ai.router, prefix="/api", tags=["AI Chat"])
