@@ -1,0 +1,7 @@
+ORACLE_GATEWAY_API_KEY=gizli_anahtar_123
+
+ORACLE_USER=myuser
+ORACLE_PASSWORD=mypassword
+ORACLE_DSN=oracle:1521/XEPDB1
+
+
