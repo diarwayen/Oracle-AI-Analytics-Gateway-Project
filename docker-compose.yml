@@ -11,7 +11,8 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SERVER_ROOT_URL=http://localhost:3000
-      - GF_INSTALL_PLUGINS=grafana-oracle-datasource,yesoreyeram-infinity-datasource
+      - GF_INSTALL_PLUGINS=grafana-oracle-datasource,yesoreyeram-infinity-datasource,marcusolsson-dynamictext-panel
+
     volumes:
       - grafana-storage:/var/lib/grafana
     networks:
@@ -38,17 +39,17 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       # Oracle Bağlantı Bilgileri
-      - ORACLE_USER=myuser
-      - ORACLE_PASSWORD=mypassword
-      - ORACLE_DSN=oracle:1521/XEPDB1
-      - ORACLE_LIB_DIR=/opt/oracle/instantclient
+      #- ORACLE_USER=myuser
+      #- ORACLE_PASSWORD=mypassword
+      #- ORACLE_DSN=oracle:1521/XEPDB1
+      #- ORACLE_LIB_DIR=/opt/oracle/instantclient
     env_file:
       - .env
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     # --- DÜZELTİLEN KISIM BAŞLANGIÇ ---
     depends_on:
-      oracle:
-        condition: service_healthy
+      #oracle:
+      #  condition: service_healthy
       ollama:
         condition: service_started
       mongo:

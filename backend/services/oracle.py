@@ -74,20 +74,36 @@ class OracleService(QueryExecutor, SchemaProvider):
 
     def get_schema_info(self) -> str:
         """
-        DİNAMİK ŞEMA ANALİZİ:
-        Sadece kolonları değil, PK (Primary Key) ve FK (Foreign Key) 
-        ilişkilerini de çekerek LLM'e 'Tablo Haritası' çıkarır.
+        DİNAMİK ŞEMA ANALİZİ (FİLTRELİ):
+        Sadece config.py içindeki ALLOWED_TABLES listesindeki tabloları çeker.
         """
-        # 1. Tabloları ve Kolonları Çek
-        cols_sql = """
+        
+        # Filtre Listesini Hazırla
+        allowed_list = settings.ALLOWED_TABLES
+        
+        # Eğer liste boşsa güvenlik için hata döndürebilir veya hepsi çekilebilir.
+        # Bizim senaryoda boşsa "Hiçbir şey çekme" veya "Hepsini çek" kararı verilmeli.
+        # Güvenli olan: Liste doluysa filtrele.
+        
+        filter_sql = ""
+        if allowed_list and len(allowed_list) > 0:
+            # SQL Injection'a karşı basit önlem: Sadece harf/sayı/altçizgi
+            # Ama config dosyasından geldiği için güveniyoruz.
+            table_names_str = "', '".join([t.upper().strip() for t in allowed_list])
+            filter_sql = f"AND table_name IN ('{table_names_str}')"
+        
+        # 1. Tabloları ve Kolonları Çek (Filtreli)
+        cols_sql = f"""
             SELECT table_name, column_name, data_type
             FROM user_tab_columns
+            WHERE 1=1
+            {filter_sql}
             ORDER BY table_name, column_id
         """
         
-        # 2. İlişkileri (Constraints) Çek - BU KISIM KRİTİK
-        # Hangi tablo, hangi kolon üzerinden hangi tabloya bağlanıyor?
-        relations_sql = """
+        # 2. İlişkileri Çek (Filtreli)
+        # Sadece ilgili tabloların ilişkilerini getir
+        relations_sql = f"""
             SELECT 
                 a.table_name, 
                 a.column_name, 
@@ -96,7 +112,8 @@ class OracleService(QueryExecutor, SchemaProvider):
             FROM user_cons_columns a
             JOIN user_constraints c ON a.owner = c.owner AND a.constraint_name = c.constraint_name
             LEFT JOIN user_constraints c_pk ON c.r_owner = c_pk.owner AND c.r_constraint_name = c_pk.constraint_name
-            WHERE c.constraint_type IN ('P', 'R') -- P: Primary Key, R: Reference (Foreign Key)
+            WHERE c.constraint_type IN ('P', 'R')
+            {filter_sql} 
         """
 
         try:
@@ -106,8 +123,10 @@ class OracleService(QueryExecutor, SchemaProvider):
             if isinstance(columns, dict) and "error" in columns:
                 return f"Şema hatası: {columns['error']}"
 
-            # İlişkileri sözlüğe çevir ki hızlı erişelim
-            # Format: {"TABLO_ADI.KOLON_ADI": "PK" veya "FK -> HEDEF_TABLO"}
+            if not columns:
+                return "HATA: İzin verilen tablolar veritabanında bulunamadı veya yetki yok."
+
+            # İlişkileri haritala
             rel_map = {}
             if isinstance(relations, list):
                 for r in relations:
@@ -117,8 +136,8 @@ class OracleService(QueryExecutor, SchemaProvider):
                     elif r['CONSTRAINT_TYPE'] == 'R' and r['R_TABLE_NAME']:
                         rel_map[key] = f"(Foreign Key -> {r['R_TABLE_NAME']} tablosuna bağlanır)"
 
-            # LLM için Okunaklı Metin Oluştur
-            schema_text = "OTOMATİK ALGILANAN VERİTABANI ŞEMASI:\n"
+            # Metni Oluştur
+            schema_text = "FİLTRELENMİŞ VERİTABANI ŞEMASI:\n"
             current_table = ""
 
             for row in columns:
@@ -130,7 +149,6 @@ class OracleService(QueryExecutor, SchemaProvider):
                     schema_text += f"\n---------------------------------\nTABLO: {t}\n"
                     current_table = t
                 
-                # İlişki var mı kontrol et
                 extra_info = rel_map.get(f"{t}.{c}", "")
                 schema_text += f"  - {c} ({d}) {extra_info}\n"
 
