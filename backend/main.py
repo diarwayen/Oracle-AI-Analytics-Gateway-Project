@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from routers import ai
-from routers import reports
+from routers import dashboard
 from core.errors import register_exception_handlers
 from services.oracle import init_pool, close_pool
 from fastapi_cache import FastAPICache
@@ -14,10 +14,13 @@ async def lifespan(app: FastAPI):
     # 1. Oracle Havuzunu Başlat
     init_pool()
     
-    # 2. Redis Cache'i Başlat (YENİ EKLENDİ)
+    # 2. Redis Cache'i Başlat
     # Docker içinde Redis servis adı 'redis' olduğu için host='redis'
     try:
-        redis = aioredis.from_url("redis://redis:6379", encoding="utf8", decode_responses=True)
+        # decode_responses=False: Redis'ten bytes döndürmeli
+        # fastapi-cache2'nin RedisBackend'i kendi encode/decode işlemini yapar
+        # Bu sayede cache'den dönen değer her zaman bytes olur ve coder.decode() güvenli çalışır
+        redis = aioredis.from_url("redis://redis:6379", encoding="utf8", decode_responses=False)
         FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
         print("Redis Cache Başlatıldı.")
     except Exception as e:
@@ -35,7 +38,7 @@ app = FastAPI(
 )
 
 app.include_router(ai.router, prefix="/api", tags=["AI Chat"])
-app.include_router(reports.router, prefix="/reports", tags=["Fixed Reports"])
+app.include_router(dashboard.router, prefix="/reports", tags=["Fixed Reports"])
 
 register_exception_handlers(app)
 
