@@ -13,7 +13,7 @@ router = APIRouter(tags=["Dashboard: Employees"])
 # Tek bir sorguda tüm kart verilerini çekmek veritabanını rahatlatır.
 # ----------------------------------------------------------------
 
-@router.get("/dashboard/employees/kpi-summary")
+@router.get("/employees/kpi-summary")
 @cache(expire=300)
 async def get_kpi_summary(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -57,7 +57,7 @@ async def get_kpi_summary(oracle: OracleService = Depends(get_oracle_service)):
 # ----------------------------------------------------------------
 
 # Metrik 8: Pozisyonlara Göre Dağılım
-@router.get("/dashboard/employees/distribution/position")
+@router.get("/employees/distribution/position")
 @cache(expire=300)
 async def get_dist_position(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -75,7 +75,7 @@ async def get_dist_position(oracle: OracleService = Depends(get_oracle_service))
     return oracle.execute_query(sql)
 
 # Metrik 9 & 13: İşyeri Bazlı Dağılım
-@router.get("/dashboard/employees/distribution/location")
+@router.get("/employees/distribution/location")
 @cache(expire=300)
 async def get_dist_location(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -92,7 +92,7 @@ async def get_dist_location(oracle: OracleService = Depends(get_oracle_service))
     return oracle.execute_query(sql)
 
 # Metrik 10 & 12: Şirket Bazlı Dağılım
-@router.get("/dashboard/employees/distribution/company")
+@router.get("/employees/distribution/company")
 @cache(expire=300)
 async def get_dist_company(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -109,7 +109,7 @@ async def get_dist_company(oracle: OracleService = Depends(get_oracle_service)):
     return oracle.execute_query(sql)
 
 # EK Metrik: Yaka Dağılımı (Mavi/Beyaz)
-@router.get("/dashboard/employees/distribution/collar")
+@router.get("/employees/distribution/collar")
 @cache(expire=300)
 async def get_dist_collar(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -126,7 +126,7 @@ async def get_dist_collar(oracle: OracleService = Depends(get_oracle_service)):
     return oracle.execute_query(sql)
 
 # EK Metrik: Medeni Durum
-@router.get("/dashboard/employees/distribution/marital")
+@router.get("/employees/distribution/marital")
 @cache(expire=300)
 async def get_dist_marital(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -143,7 +143,7 @@ async def get_dist_marital(oracle: OracleService = Depends(get_oracle_service)):
     return oracle.execute_query(sql)
 
 # EK Metrik: Çalışma Statüsü (Kadrolu/Sözleşmeli)
-@router.get("/dashboard/employees/distribution/employment-status")
+@router.get("/employees/distribution/employment-status")
 @cache(expire=300)
 async def get_dist_employment_status(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -164,7 +164,7 @@ async def get_dist_employment_status(oracle: OracleService = Depends(get_oracle_
 # ----------------------------------------------------------------
 
 # Metrik 7: İşyeri Bazlı Engelli Personel Detayı
-@router.get("/dashboard/employees/details/disabled")
+@router.get("/employees/details/disabled")
 @cache(expire=300)
 async def get_details_disabled(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -187,7 +187,7 @@ async def get_details_disabled(oracle: OracleService = Depends(get_oracle_servic
     return oracle.execute_query(sql)
 
 # Metrik 11: Görev Yeri Bazlı Çalışanlar
-@router.get("/dashboard/employees/details/duty-place")
+@router.get("/employees/details/duty-place")
 @cache(expire=300)
 async def get_details_duty_place(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -205,7 +205,7 @@ async def get_details_duty_place(oracle: OracleService = Depends(get_oracle_serv
     return oracle.execute_query(sql)
 
 # Metrik 14: Şirket ve Pozisyon Bazlı
-@router.get("/dashboard/employees/details/company-position")
+@router.get("/employees/details/company-position")
 @cache(expire=300)
 async def get_details_company_position(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -225,7 +225,7 @@ async def get_details_company_position(oracle: OracleService = Depends(get_oracl
     return oracle.execute_query(sql)
 
 # Metrik 15: Şirket, Cinsiyet ve Eğitim
-@router.get("/dashboard/employees/details/demographics-basic")
+@router.get("/employees/details/demographics-basic")
 @cache(expire=300)
 async def get_details_demographics_basic(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
@@ -246,7 +246,7 @@ async def get_details_demographics_basic(oracle: OracleService = Depends(get_ora
     return oracle.execute_query(sql)
 
 # Metrik 16: Şirket, Pozisyon, Cinsiyet ve Eğitim (En Detaylı)
-@router.get("/dashboard/employees/details/demographics-full")
+@router.get("/employees/details/demographics-full")
 @cache(expire=300)
 async def get_details_demographics_full(oracle: OracleService = Depends(get_oracle_service)):
     sql = """

@@ -38,7 +38,7 @@ app = FastAPI(
 )
 
 app.include_router(ai.router, prefix="/api", tags=["AI Chat"])
-app.include_router(dashboard.router, prefix="/reports", tags=["Fixed Reports"])
+app.include_router(dashboard.router, prefix="/api", tags=["Fixed Reports"])
 
 register_exception_handlers(app)
 

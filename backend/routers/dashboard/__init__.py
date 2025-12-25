@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from core.security import get_api_key
 from routers.dashboard import (
     employees,
     education,
@@ -13,7 +14,8 @@ from routers.dashboard import (
     real,
 )
 
-router = APIRouter()
+# API key authentication tüm dashboard endpoint'leri için zorunlu
+router = APIRouter(dependencies=[Depends(get_api_key)])
 
 # yeni router gelirse buraya ekle
 router.include_router(real.router) # bunu kaldıracağız. unutma.
