@@ -266,3 +266,75 @@ async def get_details_demographics_full(oracle: OracleService = Depends(get_orac
     FETCH FIRST 1000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+
+# --- RAPOR 1: DEPARTMAN DAĞILIMI ---
+@router.get("/employees/details/department-stats")
+@cache(expire=300) # 5 dakika cache
+async def get_department_stats(oracle: OracleService = Depends(get_oracle_service)):
+    sql = """
+    SELECT 
+        DEPARTMAN_ADI as "category", 
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY DEPARTMAN_ADI
+    ORDER BY "value" DESC
+    FETCH FIRST 15 ROWS ONLY
+    """
+    return oracle.execute_query(sql)
+
+
+# --- RAPOR 3: YAŞ ARALIĞI ---
+@router.get("/employees/details/age-stats")
+@cache(expire=300)
+async def get_age_stats(oracle: OracleService = Depends(get_oracle_service)):
+    # YAS_ARALIGI kolonu doluysa onu kullanır, boşsa YAS kolonundan biz hesaplarız
+    sql = """
+    SELECT 
+        NVL(YAS_ARALIGI, 
+            CASE 
+                WHEN YAS < 20 THEN '20 Altı'
+                WHEN YAS BETWEEN 20 AND 29 THEN '20-29 Yaş'
+                WHEN YAS BETWEEN 30 AND 39 THEN '30-39 Yaş'
+                WHEN YAS BETWEEN 40 AND 49 THEN '40-49 Yaş'
+                WHEN YAS >= 50 THEN '50 Üzeri'
+                ELSE 'Bilinmiyor'
+            END
+        ) as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY NVL(YAS_ARALIGI, 
+            CASE 
+                WHEN YAS < 20 THEN '20 Altı'
+                WHEN YAS BETWEEN 20 AND 29 THEN '20-29 Yaş'
+                WHEN YAS BETWEEN 30 AND 39 THEN '30-39 Yaş'
+                WHEN YAS BETWEEN 40 AND 49 THEN '40-49 Yaş'
+                WHEN YAS >= 50 THEN '50 Üzeri'
+                ELSE 'Bilinmiyor'
+            END)
+    ORDER BY "category"
+    """
+    return oracle.execute_query(sql)
+
+
+
+# --- RAPOR 5: İKAMET EDİLEN İL ---
+@router.get("/employees/details/city-stats")
+@cache(expire=300)
+async def get_city_stats(oracle: OracleService = Depends(get_oracle_service)):
+    sql = """
+    SELECT 
+        NVL(IKAMET_IL, 'Bilinmiyor') as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    -- "BİLGİ GİRİLMEMİŞ!!" olan satırları hariç tutuyoruz:
+    AND IKAMET_IL <> 'BİLGİ GİRİLMEMİŞ!!' 
+    AND IKAMET_IL IS NOT NULL
+    GROUP BY IKAMET_IL
+    ORDER BY "value" DESC
+    FETCH FIRST 10 ROWS ONLY
+    """
+    return oracle.execute_query(sql)
