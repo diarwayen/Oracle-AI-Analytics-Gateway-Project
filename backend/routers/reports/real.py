@@ -1,104 +1,166 @@
 from fastapi import APIRouter, Depends
 from services.oracle import OracleService
 from core.deps import get_oracle_service
+from fastapi_cache.decorator import cache # Redis önbellekleme
 import logging
-
-# --- REDIS CACHE IMPORT ---
-from fastapi_cache.decorator import cache
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["Reports DB"])
+router = APIRouter(tags=["HR Fixed Reports"])
 
-
-def execute_sql_report(query: str, oracle: OracleService, params: dict = None):
+def execute_sql_report(query: str, oracle: OracleService):
     try:
-        result = oracle.execute_query(query, params)
+        # SQL sorgusunu çalıştır ve sonucu döndür
+        result = oracle.execute_query(query)
         return result
     except Exception as e:
-        logger.error(f"DB Rapor Hatası: {str(e)}")
-        return {"error": str(e), "detail": "Lütfen /reports/setup-db adresine giderek tabloları oluşturun."}
-
-
-# 1. SATIŞ TRENDİ (60 saniye cache)
-@router.get("/db-sales-trend")
-@cache(expire=60) 
-async def real_sales_trend(oracle=Depends(get_oracle_service)):
-    sql = """
-    SELECT 
-        TO_CHAR(satis_tarihi, 'YYYY-MM-DD') as "date",
-        SUM(toplam_tutar) as "amount",
-        COUNT(*) as "order_count"
-    FROM satislar
-    GROUP BY TO_CHAR(satis_tarihi, 'YYYY-MM-DD')
-    ORDER BY 1
-    """
-    return execute_sql_report(sql, oracle)
-
-
-# 2. KATEGORİ DAĞILIMI (5 dakika cache - daha az değişir)
-@router.get("/db-category-distribution")
-@cache(expire=300)
-async def real_category_dist(oracle=Depends(get_oracle_service)):
-    sql = """
-    SELECT 
-        u.kategori as "category",
-        SUM(s.toplam_tutar) as "value"
-    FROM satislar s
-    JOIN urunler u ON s.urun_id = u.id
-    GROUP BY u.kategori
-    ORDER BY 2 DESC
-    """
-    return execute_sql_report(sql, oracle)
-
-
-# 3. KPI (60 saniye cache)
-@router.get("/db-kpi")
-@cache(expire=60)
-async def real_kpi(oracle=Depends(get_oracle_service)):
-    kpi_data = {}
-    try:
-        try:
-            res1 = oracle.execute_query("SELECT SUM(toplam_tutar) as VAL FROM satislar")
-            kpi_data["current_revenue"] = res1[0]["VAL"] if isinstance(res1, list) and res1 and res1[0]["VAL"] else 0
-        except Exception:
-            kpi_data["current_revenue"] = 0
-
-        try:
-            res2 = oracle.execute_query("SELECT COUNT(*) as VAL FROM satislar")
-            kpi_data["active_users"] = res2[0]["VAL"] if isinstance(res2, list) and res2 else 0
-        except Exception:
-            kpi_data["active_users"] = 0
-
-        try:
-            res3 = oracle.execute_query("SELECT COUNT(*) as VAL FROM urunler")
-            kpi_data["ai_token_usage"] = res3[0]["VAL"] if isinstance(res3, list) and res3 else 0
-        except Exception:
-            kpi_data["ai_token_usage"] = 0
-
-        kpi_data["monthly_revenue_target"] = 100000
-
-    except Exception as e:
-        logger.error(f"KPI DB Hatası: {e}")
+        logger.error(f"Rapor Hatası: {str(e)}")
         return {"error": str(e)}
 
-    return kpi_data
-
-
-# 4. SON İŞLEMLER (10 saniye cache - sık değişir)
-@router.get("/db-transactions")
-@cache(expire=10)
-async def real_transactions(oracle=Depends(get_oracle_service)):
+# --- RAPOR 1: DEPARTMAN DAĞILIMI ---
+@router.get("/hr-department-stats")
+@cache(expire=300) # 5 dakika cache
+async def get_department_stats(oracle: OracleService = Depends(get_oracle_service)):
     sql = """
     SELECT 
-        s.id,
-        u.urun_adi as "product",
-        s.toplam_tutar as "amount",
-        TO_CHAR(s.satis_tarihi, 'YYYY-MM-DD HH24:MI:SS') as "timestamp",
-        'Completed' as "status" 
-    FROM satislar s
-    JOIN urunler u ON s.urun_id = u.id
-    ORDER BY s.satis_tarihi DESC
-    FETCH FIRST 20 ROWS ONLY
+        DEPARTMAN_ADI as "category", 
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY DEPARTMAN_ADI
+    ORDER BY "value" DESC
+    FETCH FIRST 15 ROWS ONLY
+    """
+    return execute_sql_report(sql, oracle)
+
+# --- RAPOR 2: EĞİTİM DURUMU ---
+@router.get("/hr-education-stats")
+@cache(expire=300)
+async def get_education_stats(oracle: OracleService = Depends(get_oracle_service)):
+    # NOT: 0-9 arasındaki kodların karşılıklarını şirket standartlarına göre
+    # aşağıdaki 'THEN' kısımlarından düzeltebilirsin.
+    sql = """
+    SELECT 
+        CASE EGITIM_SEVIYESI
+            WHEN '0' THEN 'Okur Yazar Değil'
+            WHEN '1' THEN 'İlkokul'
+            WHEN '2' THEN 'Ortaokul'
+            WHEN '3' THEN 'Lise'
+            WHEN '4' THEN 'Ön Lisans (MYO)'
+            WHEN '5' THEN 'Lisans'
+            WHEN '6' THEN 'Yüksek Lisans'
+            WHEN '7' THEN 'Doktora'
+            WHEN '8' THEN 'Doçent'
+            WHEN '9' THEN 'Profesör'
+            ELSE 'Diğer' 
+        END as "category", 
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+      -- 'Bilgi Yok' olanları veya NULL olanları hariç tutuyoruz
+      AND EGITIM_SEVIYESI IS NOT NULL 
+      AND EGITIM_SEVIYESI NOT IN ('Bilgi Yok', 'Bilinmiyor', 'Tanımsız') 
+      -- Sadece 0-9 arasını almak istersen şu satırı açabilirsin:
+      -- AND EGITIM_SEVIYESI IN ('0','1','2','3','4','5','6','7','8','9')
+    GROUP BY 
+        CASE EGITIM_SEVIYESI
+            WHEN '0' THEN 'Okur Yazar Değil'
+            WHEN '1' THEN 'İlkokul'
+            WHEN '2' THEN 'Ortaokul'
+            WHEN '3' THEN 'Lise'
+            WHEN '4' THEN 'Ön Lisans (MYO)'
+            WHEN '5' THEN 'Lisans'
+            WHEN '6' THEN 'Yüksek Lisans'
+            WHEN '7' THEN 'Doktora'
+            WHEN '8' THEN 'Doçent'
+            WHEN '9' THEN 'Profesör'
+            ELSE 'Diğer' 
+        END
+    ORDER BY "value" DESC
+    """
+    return execute_sql_report(sql, oracle)
+
+# --- RAPOR 3: YAŞ ARALIĞI ---
+@router.get("/hr-age-stats")
+@cache(expire=300)
+async def get_age_stats(oracle: OracleService = Depends(get_oracle_service)):
+    # YAS_ARALIGI kolonu doluysa onu kullanır, boşsa YAS kolonundan biz hesaplarız
+    sql = """
+    SELECT 
+        NVL(YAS_ARALIGI, 
+            CASE 
+                WHEN YAS < 20 THEN '20 Altı'
+                WHEN YAS BETWEEN 20 AND 29 THEN '20-29 Yaş'
+                WHEN YAS BETWEEN 30 AND 39 THEN '30-39 Yaş'
+                WHEN YAS BETWEEN 40 AND 49 THEN '40-49 Yaş'
+                WHEN YAS >= 50 THEN '50 Üzeri'
+                ELSE 'Bilinmiyor'
+            END
+        ) as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY NVL(YAS_ARALIGI, 
+            CASE 
+                WHEN YAS < 20 THEN '20 Altı'
+                WHEN YAS BETWEEN 20 AND 29 THEN '20-29 Yaş'
+                WHEN YAS BETWEEN 30 AND 39 THEN '30-39 Yaş'
+                WHEN YAS BETWEEN 40 AND 49 THEN '40-49 Yaş'
+                WHEN YAS >= 50 THEN '50 Üzeri'
+                ELSE 'Bilinmiyor'
+            END)
+    ORDER BY "category"
+    """
+    return execute_sql_report(sql, oracle)
+
+
+
+# --- RAPOR 4: CİNSİYET DAĞILIMI ---
+@router.get("/hr-gender-stats")
+@cache(expire=300)
+async def get_gender_stats(oracle: OracleService = Depends(get_oracle_service)):
+    sql = """
+    SELECT 
+        NVL(CINSIYET, 'Belirtilmemiş') as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY CINSIYET
+    ORDER BY "value" DESC
+    """
+    return execute_sql_report(sql, oracle)
+
+# --- RAPOR 5: İKAMET EDİLEN İL ---
+@router.get("/hr-city-stats")
+@cache(expire=300)
+async def get_city_stats(oracle: OracleService = Depends(get_oracle_service)):
+    sql = """
+    SELECT 
+        NVL(IKAMET_IL, 'Bilinmiyor') as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    -- "BİLGİ GİRİLMEMİŞ!!" olan satırları hariç tutuyoruz:
+    AND IKAMET_IL <> 'BİLGİ GİRİLMEMİŞ!!' 
+    AND IKAMET_IL IS NOT NULL
+    GROUP BY IKAMET_IL
+    ORDER BY "value" DESC
+    FETCH FIRST 10 ROWS ONLY
+    """
+    return execute_sql_report(sql, oracle)
+
+# --- RAPOR 6: PERSONEL GRUBU / STATÜ ---
+@router.get("/hr-group-stats")
+@cache(expire=300)
+async def get_group_stats(oracle: OracleService = Depends(get_oracle_service)):
+    # GRUP_ACIKLAMA genelde Mavi Yaka / Beyaz Yaka bilgisini tutar
+    sql = """
+    SELECT 
+        NVL(GRUP_ACIKLAMA, 'Diğer') as "category",
+        SUM(AKTIF_CALISAN) as "value"
+    FROM IFSAPP.PERSONEL_ORG_AGACI_MV
+    WHERE AKTIF_CALISAN = 1
+    GROUP BY GRUP_ACIKLAMA
+    ORDER BY "value" DESC
     """
     return execute_sql_report(sql, oracle)
