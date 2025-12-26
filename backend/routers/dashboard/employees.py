@@ -4,7 +4,7 @@ from core.deps import get_oracle_service
 from fastapi_cache.decorator import cache
 
 # Endpointlerin tag'i
-router = APIRouter(tags=["Dashboard: Employees"])
+router = APIRouter(tags=["Employees"])
 
 # ----------------------------------------------------------------
 # 1. KPI KARTLARI (ÖZET METRİKLER)
