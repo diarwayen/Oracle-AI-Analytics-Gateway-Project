@@ -18,7 +18,7 @@ KOLONLAR VE İŞ ANLAMLARI (Business Logic):
 - UNVAN / POZISYON_ACIKLAMASI: Çalışanların görev tanımları için kullan.
 - EGITIM_SEVIYESI: Lisans, Lise vb. eğitim durumu analizleri için kullan.
 - YAS: Yaş ortalaması (AVG) veya yaş aralığı analizleri için kullan.
-- KIDEM_YILI: Çalışma süresi analizleri için kullan.
+
 
 Aşağıdaki veritabanı şemasını referans al:
 {schema}

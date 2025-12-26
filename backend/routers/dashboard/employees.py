@@ -9,9 +9,7 @@ router = APIRouter(tags=["Dashboard: Employees"])
 # ----------------------------------------------------------------
 # 1. KPI KARTLARI (ÖZET METRİKLER)
 # ----------------------------------------------------------------
-# Metrikler: 1, 2, 3, 4, 5, 6 + Yaş Ortalaması + Cinsiyet Oranı
-# Tek bir sorguda tüm kart verilerini çekmek veritabanını rahatlatır.
-# ----------------------------------------------------------------
+
 
 @router.get("/employees/kpi-summary")
 @cache(expire=300)
