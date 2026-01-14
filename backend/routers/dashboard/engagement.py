@@ -3,7 +3,7 @@ from services.oracle import OracleService
 from core.deps import get_oracle_service
 from fastapi_cache.decorator import cache
 
-router = APIRouter(tags=["Employee Engagement"])
+router = APIRouter(tags=["Engagement"])
 
 # 1. KPI Kartları: Ortalama Süreler
 @router.get("/engagement/kpi-summary")
@@ -126,3 +126,7 @@ async def get_engagement_details(oracle: OracleService = Depends(get_oracle_serv
     FETCH FIRST 5000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+
+
+

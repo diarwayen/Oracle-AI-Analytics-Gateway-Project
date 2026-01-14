@@ -7,9 +7,9 @@ from fastapi_cache.decorator import cache
 router = APIRouter(tags=["Age"])
 
 # ----------------------------------------------------------------
-# 1. KPI KARTLARI (METRİK 1-6 TEK SORGUDA)
+# 1. KPI KARTLARI
 # ----------------------------------------------------------------
-# Ortalama Yaş ve 5 farklı yaş aralığını tek seferde çekiyoruz.
+
 @router.get("/age/kpi-summary")
 @cache(expire=300)
 async def get_age_kpi_summary(oracle: OracleService = Depends(get_oracle_service)):
@@ -140,6 +140,6 @@ async def get_table_position_gender(oracle: OracleService = Depends(get_oracle_s
       AND CTURS = 1
     GROUP BY NVL(POZISYON, 'POZİSYON BİLGİSİ BOŞ'), YAS_ARALIGI, CINSIYET
     ORDER BY POZISYON, YAS_ARALIGI DESC
-    FETCH FIRST 1000 ROWS ONLY
+    FETCH FIRST 100000 ROWS ONLY
     """
     return oracle.execute_query(sql)

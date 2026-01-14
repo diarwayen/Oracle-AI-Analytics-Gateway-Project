@@ -3,13 +3,12 @@ from services.oracle import OracleService
 from core.deps import get_oracle_service
 from fastapi_cache.decorator import cache
 
-router = APIRouter(tags=["Performance Test"])
+router = APIRouter(tags=["Dataset"])
 
-# Endpoint: /api/deneme/heavy-data
-@router.get("/deneme/heavy-data")
-@cache(expire=60)
-async def get_heavy_data_dump(oracle: OracleService = Depends(get_oracle_service)):
-    # t.* ifadesi tablodaki TÜM kolonları (Adres, TC, Telefon, Kodlar vb.) çeker.
+
+@router.get("/dataset/full")
+@cache(expire=30) 
+async def get_full_dataset(oracle: OracleService = Depends(get_oracle_service)):
 
     sql = """
     SELECT 
@@ -24,6 +23,6 @@ async def get_heavy_data_dump(oracle: OracleService = Depends(get_oracle_service
       AND t.AKTIF_CALISAN = 1 
       AND t.CTURS = 1
       
-    -- FETCH FIRST 200000 ROWS ONLY
+     FETCH FIRST 2000 ROWS ONLY
     """
     return oracle.execute_query(sql)

@@ -44,3 +44,7 @@ async def get_intern_table(oracle: OracleService = Depends(get_oracle_service)):
     FETCH FIRST 1000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+
+
+

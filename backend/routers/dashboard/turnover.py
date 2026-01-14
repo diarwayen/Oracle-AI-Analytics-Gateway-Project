@@ -47,3 +47,5 @@ async def get_turnover_details(oracle: OracleService = Depends(get_oracle_servic
     FETCH FIRST 1000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+

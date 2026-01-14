@@ -12,12 +12,14 @@ from routers.dashboard import (
     interns,
     hr_training,
     deneme,
+    dataset,
 )
 
 # API key authentication tüm dashboard endpoint'leri için zorunlu
 router = APIRouter(dependencies=[Depends(get_api_key)])
 
 router.include_router(deneme.router)
+router.include_router(dataset.router)
 router.include_router(employees.router)
 router.include_router(education.router)
 router.include_router(age.router)

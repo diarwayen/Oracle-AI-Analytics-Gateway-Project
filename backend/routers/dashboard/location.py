@@ -139,3 +139,8 @@ async def get_employee_list(oracle: OracleService = Depends(get_oracle_service))
     FETCH FIRST 5000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+
+
+
+

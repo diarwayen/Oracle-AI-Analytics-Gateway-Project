@@ -261,3 +261,7 @@ async def get_full_training_details(oracle: OracleService = Depends(get_oracle_s
     FETCH FIRST 2000 ROWS ONLY
     """
     return oracle.execute_query(sql)
+
+
+
+

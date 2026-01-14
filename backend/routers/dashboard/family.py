@@ -85,3 +85,7 @@ async def get_gender_children_dist(oracle: OracleService = Depends(get_oracle_se
     ORDER BY COUNT(CALISAN_ID) DESC
     """
     return oracle.execute_query(sql)
+
+
+
+
